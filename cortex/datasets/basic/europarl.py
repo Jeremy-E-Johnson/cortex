@@ -103,6 +103,7 @@ class Europarl(BasicDataset):
         if data is None: data = self.data
         for k, v in data.iteritems():
             self.data[k] = v[idx]
+        self.n = len(idx)
 
     def get_data(self, source):
         special_tokens = {
@@ -215,7 +216,7 @@ class Europarl(BasicDataset):
 
                 f.seek(0)
                 self.logger.info('Tokenizing sentences from %s' % file_path)
-                widgets = ['Tokenizing sentences' ,
+                widgets = ['Tokenizing sentences',
                            ' (', Timer(), ') [', Percentage(), ']']
                 pbar = ProgressBar(widgets=widgets, maxval=n_lines).start()
                 for i, sentence in zip(range(0, n_lines), f):
@@ -275,8 +276,11 @@ class Europarl(BasicDataset):
             X = np.array(fr_sentences).astype(intX)
             Y = np.array(en_sentences).astype(intX)
 
-        self.nX_tokens = len(np.unique(X).tolist())
-        self.nY_tokens = len(np.unique(Y).tolist())
+        self.nX_tokens = X.max() + 1
+        self.nY_tokens = Y.max() + 1
+
+        #self.nX_tokens = len(np.unique(X).tolist())
+        #self.nY_tokens = len(np.unique(Y).tolist())
 
         self.logger.info('Creating masks')
         Mx = (X != 0).astype(intX)

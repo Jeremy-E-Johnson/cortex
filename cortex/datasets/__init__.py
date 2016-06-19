@@ -70,7 +70,7 @@ def make_one_hot(Y, n_classes=None):
         class_list = np.unique(Y).tolist()
         n_classes = len(class_list)
     else:
-        class_list = range(n_classes)
+        class_list = range(0, n_classes)
 
     if Y.ndim == 2:
         reshape = Y.shape
@@ -86,7 +86,7 @@ def make_one_hot(Y, n_classes=None):
             i = class_list.index(Y[idx])
         except ValueError:
             raise ValueError('Class list is missing elements')
-        O[idx, i] = 1.;
+        O[idx, i] = 1.
 
     if reshape is not None:
         O = O.reshape(reshape + (n_classes,))
