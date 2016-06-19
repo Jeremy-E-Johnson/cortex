@@ -18,18 +18,23 @@ from progressbar import (
 )
 import string
 
-from ..datasets import BasicDataset, make_one_hot
+from .. import BasicDataset, make_one_hot
 from ...utils import floatX, intX
 
 
 np.set_printoptions(threshold=np.nan)
 logger = logging.getLogger(__name__)
 
+
 class Europarl(BasicDataset):
     '''Europarl dataset itterator.
 
     Attributes:
-        max_sentence (int): maximimum sentence length.
+        max_sentence (int): Maximum sentence length.
+        max_length (int): Maximum number of sentences.
+        max_words (int): Maximum size of vocabulary.
+        english_to_french (bool): If true English is under name key, and French under label key, else reversed.
+        debug (bool): If true restricts max_length to 1000.
 
     '''
     _PAD = 0
@@ -40,7 +45,19 @@ class Europarl(BasicDataset):
 
     def __init__(self, source=None, english_to_french=True,
                  name='europarl', out_path=None, max_words=5000,
-                 max_sentence=30, max_length=7000, **kwargs):
+                 max_sentence=30, max_length=7000, debug=False, **kwargs):
+        """
+        Args:
+            source (str): Path to where the europarl data is stored.
+            english_to_french (bool): True for English input French labels, False for reverse.
+            name (str): Name of dataset.
+            out_path (str): Path to save outs.
+            max_words (int): Maximum vocab size, extra words are marked unknown.
+            max_sentence (int): Maximum sentence length, longer sentences are ignored.
+            max_length (int): Maximum number of sentences.
+            debug (bool): If True restricts max_length to 1000.
+            **kwargs:
+        """
 
         self.logger = logging.getLogger(
             '.'.join([self.__module__, self.__class__.__name__]))
@@ -53,6 +70,9 @@ class Europarl(BasicDataset):
         self.max_length = max_length
         self.max_words = max_words
         self.english_to_french = english_to_french
+
+        if debug:
+            self.max_length = 1000
 
         X, Y, Mx, My = self.get_data(source)
         data = {name: X,
@@ -75,15 +95,14 @@ class Europarl(BasicDataset):
     def slice_data(self, idx, data=None):
         '''Function for restricting dataset in instance.
 
+        Args:
+            idx (list): Indices of data to be kept.
+            data (dict): Data to be sliced and kept.
+
         '''
         if data is None: data = self.data
         for k, v in data.iteritems():
             self.data[k] = v[idx]
-        self.n_observations = len(idx)
-        self.X = data[self.name]
-        if self.labels in data.keys():
-            self.Y = data[self.labels]
-        self.n = self.X.shape[0]
 
     def get_data(self, source):
         special_tokens = {
@@ -123,11 +142,11 @@ class Europarl(BasicDataset):
 
             count_dict = defaultdict(int)
 
-            widgets = ['Counting words' , ' (', Timer(), ') [', Percentage(), ']']
+            widgets = ['Counting words', ' (', Timer(), ') [', Percentage(), ']']
             pbar = ProgressBar(widgets=widgets, maxval=n_lines).start()
 
             max_len = 0
-            for i, sentence in enumerate(sentences):
+            for i, sentence in zip(range(0, n_lines), sentences):
                 ps = preprocess(sentence)
                 l = len(ps)
                 if l <= self.max_sentence:
@@ -155,6 +174,8 @@ class Europarl(BasicDataset):
         def tokenize(sentence, d, pad_length):
             '''Tokenize sentence using dictionary.
 
+            If sentence is longer than max_sentence, returns [].
+
             Args:
                 sentence (str): sentence to be tokenized.
                 d (dict): token dictionary.
@@ -171,11 +192,12 @@ class Europarl(BasicDataset):
             s += [self._PAD] * max(0, pad_length + 2 - len(s))
             return s
 
-        def read_and_tokenize(file_path):
+        def read_and_tokenize(file_path, max_length):
             '''Read and tokenize a file of sentences.
 
             Args:
                 file_path (str): path to file.
+                max_length (int): maximum number of lines to read.
 
             Returns:
                 list: list of tokenized sentences.
@@ -185,7 +207,7 @@ class Europarl(BasicDataset):
             '''
             self.logger.info('Reading sentences from %s' % file_path)
             with open(file_path) as f:
-                n_lines = sum(1 for line in f)
+                n_lines = min(sum(1 for line in f), max_length)
                 f.seek(0)
                 d, max_len = make_dictionary(f, n_lines)
                 r_d = dict((v, k) for k, v in d.iteritems())
@@ -196,7 +218,7 @@ class Europarl(BasicDataset):
                 widgets = ['Tokenizing sentences' ,
                            ' (', Timer(), ') [', Percentage(), ']']
                 pbar = ProgressBar(widgets=widgets, maxval=n_lines).start()
-                for i, sentence in enumerate(f):
+                for i, sentence in zip(range(0, n_lines), f):
                     ts = tokenize(sentence, d, max_len)
                     assert len(ts) <= self.max_sentence + 2, (ts, len(ts))
                     tokenized_sentences.append(ts)
@@ -223,7 +245,7 @@ class Europarl(BasicDataset):
 
             sentences_a_tr = []
             sentences_b_tr = []
-            widgets = ['Matching sentences' ,
+            widgets = ['Matching sentences',
                        ' (', Timer(), ') [', Percentage(), ']']
             trimmed = 0
             pbar = ProgressBar(widgets=widgets, maxval=len(sentences_a)).start()
@@ -239,10 +261,10 @@ class Europarl(BasicDataset):
             return sentences_a_tr, sentences_b_tr
 
         fr_sentences, self.fr_dict, self.fr_dict_r = read_and_tokenize(
-            path.join(path.join(source, 'europarl-v7.fr-en.fr')))
+            path.join(path.join(source, 'europarl-v7.fr-en.fr')), self.max_length)
 
         en_sentences, self.en_dict, self.en_dict_r = read_and_tokenize(
-            path.join(path.join(source, 'europarl-v7.fr-en.en')))
+            path.join(path.join(source, 'europarl-v7.fr-en.en')), self.max_length)
 
         fr_sentences, en_sentences = match_and_trim(fr_sentences, en_sentences)
 
@@ -264,6 +286,19 @@ class Europarl(BasicDataset):
 
     @staticmethod
     def factory(C=None, split=None, idx=None, batch_sizes=None, **kwargs):
+        '''
+
+        Args:
+            C: Data iterator to use, defaults to Europarl.
+            split: List of percentage values for train, valid, and test datasets respectively.
+            idx: List of indices for train, valid and test datasets respectively.
+            batch_sizes: List of batch sizes for train, valid, and test datasets respectively.
+            **kwargs: Other arguments to be passed to the data iterator.
+
+        Returns: Train, valid, test,(datasets) indices(list of indices for data of each).
+
+        '''
+
         if C is None:
             C = Europarl
         europarl = C(batch_size=10, **kwargs)
