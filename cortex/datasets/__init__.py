@@ -56,7 +56,7 @@ def resolve(c):
 
     return C
 
-def make_one_hot(Y):
+def make_one_hot(Y, n_classes=None):
     '''Makes integer label data into one-hot.
 
     Args:
@@ -66,13 +66,30 @@ def make_one_hot(Y):
         numpy.array: N x n_labels array of ones and zeros.
 
     '''
-    class_list = np.unique(Y).tolist()
-    n_classes = len(class_list)
+    if n_classes is None:
+        class_list = np.unique(Y).tolist()
+        n_classes = len(class_list)
+    else:
+        class_list = range(n_classes)
+
+    if Y.ndim == 2:
+        reshape = Y.shape
+        Y = Y.reshape((Y.shape[0] * Y.shape[1]))
+    elif Y.ndim > 2:
+        raise TypeError('`make_one_hot` supports 1 or 2 dims, (%d)' % Y.ndim)
+    else:
+        reshape = None
 
     O = np.zeros((Y.shape[0], n_classes), dtype='float32')
     for idx in xrange(Y.shape[0]):
-        i = class_list.index(Y[idx])
+        try:
+            i = class_list.index(Y[idx])
+        except ValueError:
+            raise ValueError('Class list is missing elements')
         O[idx, i] = 1.;
+
+    if reshape is not None:
+        O = O.reshape(reshape + (n_classes,))
     return O
 
 def load_data(dataset=None,
@@ -323,7 +340,7 @@ class BasicDataset(Dataset):
 
     '''
     def __init__(self, data, distributions=None, labels='label', name=None,
-                balance=False, **kwargs):
+                balance=False, one_hot=True, **kwargs):
         '''Init function for BasicDataset.
 
         Args:
@@ -334,6 +351,7 @@ class BasicDataset(Dataset):
             name: (Optional[str]): Name of the dataset. Should be one of the
                 keys in data.
             balance (bool): replicate samples to balance the dataset.
+            one_hot (bool): convert labels to one-hot.
             **kwargs: extra arguments to pass to Dataset constructor.
 
         '''

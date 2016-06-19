@@ -17,13 +17,13 @@ from progressbar import (
     Timer
 )
 import random
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, IncrementalPCA
 import warnings
 import yaml
 
 from ...analysis.mri import rois
 from .. import BasicDataset
-from . import nifti_viewer
+from ...analysis import nifti_viewer
 from ...utils import floatX
 from ...utils.tools import resolve_path
 
@@ -52,14 +52,16 @@ class MRI(BasicDataset):
     '''
 
     def __init__(self, source=None, name='mri', flip_signs=False,
-                 pca_components=0, distribution='gaussian', **kwargs):
+                 pca_components=0, incremental_pca=False,
+                 distribution='gaussian', **kwargs):
         '''Init function for MRI.
 
         Args:
             source (str): path of the source.
             name (str): name of the dataset.
-            pca_components: (Optional[int]): if not 0, decompose the data
+            pca_components (Optional[int]): if not 0, decompose the data
                 using PCA.
+            incremental_pca (bool): Use incremental PCA instead of standard.
             distribution (Optional[str]): distribution of the primary data.
                 See `models.distributions` for details.
             **kwargs: extra keyword arguments passed to BasicDataset
@@ -83,8 +85,13 @@ class MRI(BasicDataset):
         if self.pca_components:
             X -= X.mean(axis=0)
             if self.pca is None:
-                self.logger.info('Forming PCA')
-                self.pca = PCA(pca_components, whiten=True)
+                if incremental_pca:
+                    self.logger.info('Using incremental PCA')
+                    PCAC = IncrementalPCA
+                else:
+                    self.logger.info('Using PCA')
+                    PCAC = PCA
+                self.pca = PCAC(pca_components, whiten=True)
                 self.logger.info('Fitting PCA... (please wait)')
                 self.pca.fit(X)
                 if self.pca_file is not None:
@@ -386,8 +393,14 @@ class MRI(BasicDataset):
 
         return images, out_files
 
+    def prepare_images(self, x):
+        if self.pca is not None and self.pca_components:
+            x = self.pca.inverse_transform(x)
+        return x
+
     def save_images(self, x, out_file=None, remove_niftis=True,
-                    x_limit=None, roi_dict=None, signs=None, **kwargs):
+                    x_limit=None, roi_dict=None, signs=None, stats=None,
+                    **kwargs):
         '''Saves images from array.
 
         Args:
@@ -396,29 +409,32 @@ class MRI(BasicDataset):
             remove_niftis (bool): delete images after making montage.
             x_limit (Optional(int)): if not None, limit the number of images
                 along the x axis.
+            stats (Optional(dict)): dictionary of statistics.
             **kwargs: keywork arguments for montage.
 
         '''
-        if self.pca is not None and self.pca_components:
-            x = self.pca.inverse_transform(x)
+        x = self.prepare_images(x)
 
         if len(x.shape) == 3:
             x = x[:, 0, :]
 
-        x_ = x.copy()
         if signs is not None:
             x *= signs[:, None]
+
         x = self._unmask(x)
         images, nifti_files = self.save_niftis(x)
-        if roi_dict is None: roi_dict =dict()
+
+        if roi_dict is None: roi_dict = dict()
         roi_dict.update(**rois.main(nifti_files))
+
+        if stats is None: stats = dict()
+        stats['gm'] = [roi_dict[i]['top_clust']['grey_value'] for i in roi_dict.keys()]
 
         if remove_niftis:
             for f in nifti_files:
                 os.remove(f)
         nifti_viewer.montage(images, self.anat_file, roi_dict,
-                             out_file=out_file, **kwargs)
-        return x_
+                             out_file=out_file, stats=stats, **kwargs)
 
     def visualize_pca(self, out_file, **kwargs):
         '''Saves the PCA component image.
