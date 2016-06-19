@@ -20,7 +20,7 @@ from . import floatX, intX
 from ..models import Layer
 from .monitor import SimpleMonitor
 from .preprocessor import Preprocessor
-from .tools import load_model as _load_model, print_profile, print_section
+from .tools import _p, load_model as _load_model, print_profile, print_section
 from .training import (
     main_loop, make_argument_parser_trainer, set_experiment, set_model,
     set_optimizer, set_params)
@@ -113,6 +113,7 @@ def set_tparams(module):
     tparams = OrderedDict()
     for k, v in module.models.iteritems():
         tparams.update(**v.set_tparams())
+    module.tparams = tparams
     return tparams
 
 def set_cost(module):
@@ -127,7 +128,7 @@ def set_cost(module):
                  '\n\tresult keys: %s'
                  '\n\tconstants: %s'
                  '\n\tupdates: %s'
-                 % (results.keys(), updates.keys(), constants))
+                 % (results.keys(), constants, updates.keys()))
     inputs = OrderedDict((k, v) for k, v in module.inputs.iteritems()
         if k in used_inputs)
     module.input_keys = used_inputs
@@ -143,6 +144,19 @@ def set_test_function(module, results, outputs):
     else:
         f_test = theano.function(module.inputs.values(), results)
     return f_test
+
+def set_out_function(module, results, outputs):
+    '''Sets function for outputs.
+    '''
+    outs = OrderedDict()
+    for k, v in outputs.iteritems():
+        if isinstance(v, list):
+            for i, _v in enumerate(v):
+                outs['%s_%d' % (k, i)] = _v
+        else:
+            outs[k] = v
+    f_outs = theano.function(module.inputs.values(), outs)
+    return f_outs
 
 def set_save_function(module, tparams):
     '''Sets the save function of a module.
@@ -197,12 +211,12 @@ def finish(module):
         module.finish()
 
 def train(module, cost, tparams, updates, constants, f_test=None, f_save=None,
-          f_viz=None, test_every=10, show_every=10):
+          f_viz=None, f_outs=None, test_every=10, show_every=10,
+          monitor_gradients=False):
     print_section('Getting gradients and building optimizer.')
 
     excludes = module.learning_args.pop('excludes', [])
     tparams, all_params = set_params(tparams, updates, excludes=excludes)
-
     f_grad_shared, f_grad_updates, learning_args = set_optimizer(
         module.inputs.values(), cost, tparams, constants, updates, [],
         **module.learning_args)
@@ -213,8 +227,8 @@ def train(module, cost, tparams, updates, constants, f_test=None, f_save=None,
     main_loop(
         module.dataset, module.valid_dataset,
         f_grad_shared, f_grad_updates, f_test,
-        save=f_save, save_images=f_viz,
-        monitor=monitor,
+        save=f_save, save_images=f_viz, f_outs=f_outs,
+        monitor=monitor, monitor_gradients=monitor_gradients,
         out_path=module.out_path,
         name=module.name,
         test_every=test_every,
@@ -242,6 +256,7 @@ class Trainer(object):
         f_test = set_test_function(module, results, outputs)
         f_save = set_save_function(module, tparams)
         f_viz = set_viz_function(module, results, outputs)
+        f_outs = set_out_function(module, results, outputs)
 
         check(module)
         finish(module)
@@ -249,7 +264,8 @@ class Trainer(object):
         kwargs.update(
             f_test=f_test,
             f_save=f_save,
-            f_viz=f_viz
+            f_viz=f_viz,
+            f_outs=f_outs
         )
 
         train(module, cost, tparams, updates, constants, **kwargs)
@@ -455,7 +471,7 @@ def load_module(model_file, strict=True):
         logger.info('---Loading params for %s' % model.name)
         for k, v in model.params.iteritems():
             try:
-                param_key = '{name}_{key}'.format(name=model.name, key=k)
+                param_key = _p(model.name, k)
                 pretrained_v = pretrained_kwargs.pop(param_key)
                 logger.info('Found %s for %s %s'
                             % (k, model.name, pretrained_v.shape))
@@ -503,8 +519,9 @@ def main(args=None):
     module.update(exp_dict)
     show_every = exp_dict.pop('show_every', 10)
     test_every = exp_dict.pop('test_every', 10)
+    monitor_gradients = exp_dict.pop('monitor_gradients', False)
     model_to_load = exp_dict.pop('model_to_load', None)
 
     trainer = Trainer()
     trainer.run(module, show_every=show_every, test_every=test_every,
-                model_to_load=model_to_load)
+                model_to_load=model_to_load, monitor_gradients=monitor_gradients)

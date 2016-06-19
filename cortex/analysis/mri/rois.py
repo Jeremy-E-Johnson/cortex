@@ -174,7 +174,11 @@ def check_grey(coords):
     patt = re.compile('   Focus point: grey   \(p = ([0-9]\.[0-9]*)\)')
     prob = double([m.group(1) for m in [patt.match(line) for line in lines] if m])
 
-    assert len(prob) == 1
+    if len(prob) == 0:
+        prob = [None]
+    if len(prob) != 1:
+        raise ValueError('Probility length incorrect: lines %r, prob %s'
+                         % (lines, prob))
     return prob[0]
 
 def return_region(coords, atlas):
@@ -247,16 +251,15 @@ def get_cluster_info(clusters):
         coords = tuple([cs[x] for x in [7, 8, 9]])
 
         rois = find_region_names(coords)
-#            grey_value = check_grey(coords)
+        grey_value = check_grey(coords)
 
         cluster_dict[c] = dict(
-            coords = coords,
-            volume = cs[0],
-            cm = cm,
-            mean_intensity = abs(cs[6]),
-            rois = rois
-            )
-#                             'grey_value': grey_value}
+            coords=coords,
+            volume=cs[0],
+            cm=cm,
+            mean_intensity=abs(cs[6]),
+            rois=rois,
+            grey_value=grey_value)
 
     # Given the cluster information found above, we find the 'top' cluster.
     # The maximum clister is given by the one with the highest mean intensity * volume.
@@ -266,7 +269,7 @@ def get_cluster_info(clusters):
         cluster['int_prop'] = (cluster['mean_intensity'] * cluster['volume'] /
                                intensity_sum)
 
-        if cluster['int_prop'] > max_int_prop or np.isnan(cluster['int_prop']): # why nan?
+        if cluster['int_prop'] > max_int_prop or np.isnan(cluster['int_prop']):
             max_int_prop = cluster['int_prop']
             top_clust = cluster
 
@@ -312,6 +315,9 @@ def find_rois(fnifti, thr, test=False):
             roi_dict[i] = get_cluster_info(clusters)
 
     elif isinstance(fnifti, list):
+        if test:
+            logger.info('Testing rois')
+            cluster_worker(fnifti[0], thr, dict())
         num_features = len(fnifti)
         roi_dict = mp.Manager().dict()
         p = mp.Pool(num_features, init_worker)
@@ -322,16 +328,16 @@ def find_rois(fnifti, thr, test=False):
             p.map(worker_helper, args_iter)
             p.close()
             p.join()
-        except KeyboardInterrupt as e:
+        except KeyboardInterrupt:
             p.close()
             p.terminate()
             p.join()
-            raise e
-        except Exception as e:
+            raise
+        except Exception:
             p.close()
             p.terminate()
             p.join()
-            raise e
+            raise
         roi_dict = dict(roi_dict)
     else:
         raise NotImplementedError('Type %s not supported' % type(fnifti))
