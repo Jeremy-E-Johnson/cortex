@@ -20,7 +20,7 @@ import string
 
 from .. import BasicDataset, make_one_hot
 from ...utils import floatX, intX
-
+from ...utils.tools import resolve_path
 
 np.set_printoptions(threshold=np.nan)
 logger = logging.getLogger(__name__)
@@ -65,6 +65,7 @@ class Europarl(BasicDataset):
 
         if source is None:
             raise ValueError('No source file provided.')
+        source = resolve_path(source)
 
         self.max_sentence = max_sentence
         self.max_length = max_length

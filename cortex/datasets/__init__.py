@@ -42,12 +42,14 @@ def resolve(c):
     from .basic.caltech import CALTECH
     from .basic.uci import UCI
     from .basic.cifar import CIFAR
+    from .basic.europarl import Europarl
 
     r_dict = {
         'mnist': MNIST,
         'cifar': CIFAR,
         'caltech': CALTECH,
-        'uci': UCI
+        'uci': UCI,
+        'europarl': Europarl
     }
 
     C = r_dict.get(c, None)
