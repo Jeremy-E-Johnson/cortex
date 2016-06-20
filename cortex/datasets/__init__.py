@@ -369,6 +369,7 @@ class BasicDataset(Dataset):
         self.balance = balance
 
         self.dims = dict()
+        self.dimsall = dict()
         if distributions is None:
             self.distributions = dict()
         else:
@@ -393,6 +394,7 @@ class BasicDataset(Dataset):
                                     'number of samples (shape[0]), '
                                     '(%d vs %d)' % (self.n, v.shape[0]))
             self.dims[k] = v.shape[1]
+            self.dimsall[k] = v.shape
             if not k in self.distributions.keys():
                 self.distributions[k] = 'binomial'
 
