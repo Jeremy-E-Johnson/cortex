@@ -88,6 +88,9 @@ class Europarl(BasicDataset):
         super(Europarl, self).__init__(data, distributions=distributions,
                                        name=name, one_hot=False, **kwargs)
 
+        self.dimsall['europarl'] = self.dimsall['europarl'][0], self.dimsall['europarl'][1], self.nX_tokens
+        self.dimsall['label'] = self.dimsall['label'][0], self.dimsall['label'][1], self.nY_tokens
+
         self.out_path = out_path
 
         if self.shuffle:
@@ -123,7 +126,18 @@ class Europarl(BasicDataset):
             '''
             return s.lower().translate(self.table, string.punctuation).split()
 
-        def make_dictionary(sentences, n_lines, max_words=None):
+        def find_long_sentences(epath, fpath, n_lines):
+            with open(epath) as e:
+                with open(fpath) as f:
+                    e.seek(0)
+                    f.seek(0)
+                    too_long_indices = []
+                    for i, eSentence, fSentence in zip(range(0, n_lines), e, f):
+                        if len(preprocess(eSentence)) > self.max_sentence or len(preprocess(fSentence)) > self.max_sentence:
+                            too_long_indices.append(i)
+                    return too_long_indices
+
+        def make_dictionary(sentences, n_lines, max_words=None, too_long_indices=None):
             '''Forms a dictionary from words in sentences.
 
             If there are more words than max_words, use the top frequent ones.
@@ -141,6 +155,7 @@ class Europarl(BasicDataset):
             '''
             self.logger.info('Forming dictionary')
             if max_words is None: max_words = self.max_words
+            if too_long_indices is None: too_long_indices = []
 
             count_dict = defaultdict(int)
 
@@ -151,7 +166,7 @@ class Europarl(BasicDataset):
             for i, sentence in zip(range(0, n_lines), sentences):
                 ps = preprocess(sentence)
                 l = len(ps)
-                if l <= self.max_sentence:
+                if l <= self.max_sentence and i not in too_long_indices:
                     for word in ps:
                         count_dict[word] += 1
                     max_len = max(l, max_len)
@@ -194,7 +209,7 @@ class Europarl(BasicDataset):
             s += [self._PAD] * max(0, pad_length + 2 - len(s))
             return s
 
-        def read_and_tokenize(file_path, max_length):
+        def read_and_tokenize(file_path, max_length, too_long_indices=None):
             '''Read and tokenize a file of sentences.
 
             Args:
@@ -211,7 +226,7 @@ class Europarl(BasicDataset):
             with open(file_path) as f:
                 n_lines = min(sum(1 for line in f), max_length)
                 f.seek(0)
-                d, max_len = make_dictionary(f, n_lines)
+                d, max_len = make_dictionary(f, n_lines, too_long_indices=too_long_indices)
                 r_d = dict((v, k) for k, v in d.iteritems())
                 tokenized_sentences = []
 
@@ -262,11 +277,14 @@ class Europarl(BasicDataset):
 
             return sentences_a_tr, sentences_b_tr
 
+        too_long_indices = find_long_sentences(path.join(path.join(source, 'europarl-v7.fr-en.en')),
+                         path.join(path.join(source, 'europarl-v7.fr-en.fr')), self.max_length)
+
         fr_sentences, self.fr_dict, self.fr_dict_r = read_and_tokenize(
-            path.join(path.join(source, 'europarl-v7.fr-en.fr')), self.max_length)
+            path.join(path.join(source, 'europarl-v7.fr-en.fr')), self.max_length, too_long_indices=too_long_indices)
 
         en_sentences, self.en_dict, self.en_dict_r = read_and_tokenize(
-            path.join(path.join(source, 'europarl-v7.fr-en.en')), self.max_length)
+            path.join(path.join(source, 'europarl-v7.fr-en.en')), self.max_length, too_long_indices=too_long_indices)
 
         fr_sentences, en_sentences = match_and_trim(fr_sentences, en_sentences)
 
@@ -277,11 +295,8 @@ class Europarl(BasicDataset):
             X = np.array(fr_sentences).astype(intX)
             Y = np.array(en_sentences).astype(intX)
 
-        self.nX_tokens = X.max() + 1
-        self.nY_tokens = Y.max() + 1
-
-        #self.nX_tokens = len(np.unique(X).tolist())
-        #self.nY_tokens = len(np.unique(Y).tolist())
+        self.nX_tokens = len(np.unique(X).tolist()) + int(3 not in np.unique(X).tolist())
+        self.nY_tokens = len(np.unique(Y).tolist()) + int(3 not in np.unique(Y).tolist())
 
         self.logger.info('Creating masks')
         Mx = (X != 0).astype(intX)
@@ -366,10 +381,31 @@ class Europarl(BasicDataset):
                                      n_classes=self.nY_tokens)
         return rval
 
-    def save_images(self, out_file=None):
+    def save_images(self, image, english=True, out_path=None):
         '''Shows tokenized in terms of original words.
 
         Uses reverse dictionary.
 
         '''
-        raise NotImplementedError()
+        print image.shape
+        sentences = []
+        for sentence in image:
+            sen = []
+            for token in sentence:
+
+                if english:
+                    sen.append(self.en_dict_r[token.argmax()])
+                else:
+                    sen.append(self.fr_dict_r[token.argmax])
+            sentences.append(sen)
+
+        if out_path is None:
+            for sentence in sentences:
+                print ' '.join(sentence) + '.'
+
+        else:
+            with open(out_path, 'w') as f:
+                for sentence in sentences:
+                    f.write(' '.join(sentence) + '.')
+
+        return sentences
