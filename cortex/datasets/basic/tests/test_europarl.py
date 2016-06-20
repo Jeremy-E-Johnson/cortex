@@ -9,7 +9,7 @@ from cortex.datasets.basic.europarl import Europarl
 
 def test_europarl(split=[0.7, 0.2, 0.1], batch_sizes=[10, 10, 10]):
     train, valid, test, idx = Europarl.factory(split=split, batch_sizes=batch_sizes,
-                                               debug=True, source='/export/mialab/users/jjohnson/data/basic')
+                                               debug=True, source='/export/mialab/users/jjohnson/data/basic/europarl')
 
     for i, dataset in enumerate([train, valid, test]):
 
