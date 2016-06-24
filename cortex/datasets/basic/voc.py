@@ -7,7 +7,9 @@ from os import path
 import logging
 from ...utils.tools import resolve_path
 from PIL import Image
+import PIL
 import random
+import numpy as np
 
 
 class VOC(BasicDataset):
@@ -100,7 +102,6 @@ class VOC(BasicDataset):
             width, height, = im.size
             return [pixels[i * width:(i + 1) * width] for i in xrange(height)]
 
-
         def project_to_binary(pixels):
             """Helper function for get_data, returns binary version of input pixels.
 
@@ -112,7 +113,7 @@ class VOC(BasicDataset):
             """
             retval = []
             for ln in pixels:
-                retval.append([bool(val) for val in ln])
+                retval.append([int(bool(val)) for val in ln])
             return retval
 
         def get_random_chunk(pixels_data, pixels_label):
@@ -129,13 +130,13 @@ class VOC(BasicDataset):
             x = rand.randint(buff_dist, len(pixels_data[0]) - buff_dist)
             data_chunk = []
             label_val = pixels_label[y][x]
-            for i in range(y -buff_dist + 1, y + buff_dist):
-                data_chunk.append(pixels_data[i][x - buff_dist + 1 :  buff_dist - 1])
+            for index in range(y - buff_dist + 1, y + buff_dist):
+                data_chunk.append(pixels_data[index][x - buff_dist + 1:x + buff_dist])
             assert len(data_chunk) == self.chunk_size and len(data_chunk[0]) == self.chunk_size
             return data_chunk, label_val
 
         names = []
-        with open(source + 'VOCdevkit/VOC2010/ImageSets/Segmentation/' + mode + '.txt') as f:
+        with open(source + '/basic/VOCdevkit/VOC2010/ImageSets/Segmentation/' + mode + '.txt') as f:
             for line in f:
                 names.append(line[:-1])
 
@@ -144,12 +145,12 @@ class VOC(BasicDataset):
         images_loaded = 0
         for name in names:
             if images_loaded < self.images_loaded:
-                label_im = Image.open(source + '/VOCdevkit/VOC2010/SegmentationObject/' + name + '.png')
+                label_im = Image.open(source + '/basic/VOCdevkit/VOC2010/SegmentationObject/' + name + '.png')
                 label_pixels = image_to_pixels(label_im)
                 if get_unique(label_pixels) == 3:
                     self.label_images.append(project_to_binary(label_pixels))
 
-                    data_im = Image.open(source + 'VOCdevkit/VOC2010/JPEGImages/' + name + '.jpeg').convert('1')
+                    data_im = Image.open(source + '/basic/VOCdevkit/VOC2010/JPEGImages/' + name + '.jpg').convert('1')
                     self.data_images.append(image_to_pixels(data_im))
 
                     images_loaded += 1
@@ -161,11 +162,11 @@ class VOC(BasicDataset):
         for i in xrange(0, self.chunks):
             k = rand.randint(0, images_loaded - 1)
             x, y = get_random_chunk(self.data_images[k], self.label_images[k])
-            X.append(x)
-            Y.append(y)
+            X.append(np.array(x, dtype='float32')/255)  # Normalize
+            Y.append(np.array(y, dtype='float32'))
 
         assert len(X) == self.chunks and len(Y) == self.chunks
 
-        return X, Y
+        return np.array(X), np.array(Y)
 
 
