@@ -7,6 +7,7 @@ import numpy as np
 import theano
 import theano.tensor as T
 
+theano.config.optimizer = 'None'
 
 def test_build(dim_in=13, dim_h=17):
     pyramid = Pyramid_RNN.factory(dim_in=dim_in, dim_hs=[dim_h],
@@ -37,3 +38,18 @@ def test_step(pyramid=None, dim_in=13, dim_h=17):
     n = np.tanh(preact)
 
     np.testing.assert_almost_equal(t, n)
+
+
+def test_call(pyramid=None, dim_in=13, dim_h=17):
+    if pyramid is None:
+        pyramid = test_build(dim_in=dim_in, dim_h=dim_h)
+
+    rng = np.random.RandomState()
+
+    x = rng.randn(13, 10, 13)
+
+    y = pyramid(x)
+
+    f = theano.function([], y[0]['p'])
+
+    print f()
