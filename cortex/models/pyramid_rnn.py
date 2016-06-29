@@ -14,16 +14,19 @@ from ..utils import floatX
 
 class Pyramid_RNN(RNN):
 
-    def __init__(self, dim_in, dim_hs, dim_out=None, output_net=None,
-                 input_net=None, name='pyramid', **kwargs):
+    def __init__(self, dim_in, dim_hs, width, dim_out=None,
+                 output_net=None, input_net=None, name='pyramid', **kwargs):
 
         if dim_out is None:
             self.dim_out = 1
+
+        self.width = width
+
         super(Pyramid_RNN, self).__init__(dim_in=dim_in, dim_hs=dim_hs, name=name,
                                           output_net=output_net, input_net=input_net, **kwargs)
 
     @staticmethod
-    def factory(dim_in=None, dim_out=None, dim_hs=None, **kwargs):
+    def factory(dim_in=None, dim_out=None, dim_hs=None, width=None, **kwargs):
         '''Factory for creating MLPs for Pyramid_RNN and returning .
 
         Convenience to quickly create MLPs from dictionaries, linking all
@@ -34,6 +37,7 @@ class Pyramid_RNN(RNN):
             dim_hs (list): dimensions of recurrent units.
             dim_out (Optional[int]): output dimension. If not provided, assumed
                 to be dim_in.
+            width (int): How wide the input block is.
 
         Returns:
             RNN
@@ -42,10 +46,41 @@ class Pyramid_RNN(RNN):
         assert len(dim_hs) > 0
         if dim_out is None:
             dim_out = 1
-        mlps, kwargs = RNN.mlp_factory(dim_in, dim_out, dim_hs, **kwargs)
+        mlps, kwargs = Pyramid_RNN.mlp_factory(dim_in, dim_out, dim_hs, **kwargs)
         kwargs.update(**mlps)
 
-        return Pyramid_RNN(dim_in, dim_hs, dim_out=dim_out, **kwargs)
+        return Pyramid_RNN(dim_in, dim_hs, width, dim_out=dim_out, **kwargs)
+
+    @staticmethod
+    def mlp_factory(dim_in, dim_out, dim_hs, o_dim_in=None, i_net=None,
+                    o_net=None, c_net=None, data_distribution='binomial',
+                    initialization=None, init_args=None, **kwargs):
+        '''Factory for creating MLPs for Pyramid RNN.
+
+        Args:
+            dim_in (int): input dimension.
+            dim_out (int): output dimension. If not provided, assumed
+                to be dim_in.
+            dim_hs (list): dimensions of recurrent units.
+            o_dim_in (Optional[int]): optional input dimension for output
+                net. If not provided, then use the last hidden dim.
+            i_net (dict): input network args.
+            o_net (dict): output network args.
+            c_net (dict): conditional network args.
+            data_distribution (str): distribution of the output.
+            initialization (str): type of initialization.
+            init_args (dict): initialization keyword arguments.
+            **kwargs: extra keyword arguments.
+
+        Returns:
+            dict: MLPs.
+            dict: extra keyword arguments.
+
+        '''
+
+        mlps, kwargs = RNN.mlp_factory(dim_in=dim_in, dim_out=dim_out, dim_hs=dim_hs, **kwargs)
+
+        return mlps, kwargs
 
     def set_params(self):
         '''Initialize RNN parameters.
@@ -95,15 +130,17 @@ class Pyramid_RNN(RNN):
         input = x
 
         updates = theano.OrderedUpdates()
+        print 'width = ', self.width, '**************** ', (self.width + 1)/2, self.dim_hs, '++++++++++++++++++++++++++'
 
         h0s = []
         hs = []
-        directional_values = []
+        #directional_values = []
         for k in range(0, 4):  # Iterate through directions.
-            x = np.swapaxes(np.rot90(np.swapaxes(input, 1, 2), k), 1, 2)[0:(self.dim_in + 1)/2].astype('float32')
-            h0s.append([T.alloc(0., x.shape[1], self.dim_in, dim_h).astype(floatX) for dim_h in self.dim_hs])
+            #x = np.swapaxes(np.rot90(np.swapaxes(input, 1, 2), k), 1, 2)[0:(self.width + 1)/2].astype('float32')
+            x = self.rotate(input, k)[:(self.width + 1)/2, :, :].astype('float32')
+            h0s.append([T.alloc(0., (self.width + 1)/2, x.shape[1], dim_h).astype(floatX) for dim_h in self.dim_hs])
             for i, h0 in enumerate(h0s[k]):
-                seqs         = [m[:, :, None]] + self.call_seqs(x, None, i, *params)
+                seqs         = [m[:, :, :, None]] + self.call_seqs(x, None, i, *params)
                 outputs_info = [h0]
                 non_seqs     = [self.get_recurrent_args(*params)[i]]
                 h, updates_ = theano.scan(
@@ -116,14 +153,19 @@ class Pyramid_RNN(RNN):
                 hs.append(h)
                 x = h
                 updates += updates_
-            directional_values.append(h[(self.dim_in + 1)/2])  # Remember directional outputs.
+            if k == 0:
+                output = [h[-1, :, (self.width + 1)/2, :]]
+            else:
+                output = output + [h[-1, :, (self.width + 1)/2, :]]
+            #directional_values += [h[-1, :, (self.width + 1)/2, :]]  # Remember directional outputs.
 
+        #print T.sum(output)
         o_params    = self.get_output_args(*params)
-        out_net_out = self.output_net.step_call(sum(directional_values), *o_params)  # Sum different directions.
+        out_net_out = self.output_net.step_call(T.sum(output), *o_params)  # Sum different directions.
         preact      = out_net_out['z']
         p           = out_net_out['p']
 
-        return coll.OrderedDict(hs=hs, p=p, z=preact), updates, h0s
+        return coll.OrderedDict(hs=hs, p=p, z=preact), updates, h0s[0]
 
     def __call__(self, x, m=None, h0s=None, condition_on=None):
         '''Call function.
@@ -143,18 +185,9 @@ class Pyramid_RNN(RNN):
 
         '''
         constants = []
-        input_rotations = []
-
-        ''' Calculating h0s in step_call so that rotations of data happen once and don't need to be saved.
-        if h0s is None and self.init_net is not None:
-            h0s = self.init_net.initialize(x[0])
-            constants += h0s
-        elif h0s is None:
-            h0s = [T.alloc(0., x.shape[1], dim_h).astype(floatX) for dim_h in self.dim_hs]
-        '''
 
         if m is None:
-            m = T.ones((x.shape[0], x.shape[1])).astype(floatX)
+            m = T.ones((x.shape)).astype(floatX)
 
         params = self.get_sample_params()
 
@@ -175,18 +208,60 @@ class Pyramid_RNN(RNN):
             list: list of scan inputs.
 
         '''
-        print x.shape
+        """
+        #print x.shape
+        x = x[:, :, :, None]#.swapaxes(0, 3)
+        #print x.shape
         if level == 0:
             i_params = self.get_input_args(*params)
             a = self.input_net.step_preact(x, *i_params)
         else:
             i_params = self.get_inter_args(level - 1, *params)
             a = self.inter_nets[level - 1].step_preact(x, *i_params)
-        print a.shape
-        print self.input_net.dim_in
-        print self.input_net.dim_out
+        #print a.shape
+        #print self.input_net.dim_in
+        #print self.input_net.dim_out
+        """
+
+        params = list(params)
+
+        print params
+
+        W = params.pop(1)
+        b = params.pop(1)
+
+        print W, type(W)
+
+        print params
+
+        for i, z in enumerate(x):
+            a = T.concatenate([(T.dot(c, W) + b)[:, None, None] for c in z.swapaxes(0, 1)], 1).swapaxes(0, 1)
+            if i:
+                T.concatenate([rval, a], 2)
+            else:
+                rval = a
+
+        #a = T.dot(a, T.alloc(0, 2, 2))
 
         if condition_on is not None:
             a += condition_on
 
         return [a]
+
+    def rotate(self, tensor, n_times):
+        #retval = tensor.copy()
+        if n_times == 0:
+            return tensor
+
+        #for i in range(0, self.width):
+        #    retval[:, :, tensor.shape[0] - i] = tensor[i, :, :]
+
+        #retval = np.array([tensor[:, :, self.width - 1 - i] for i in range(0, self.width)])
+        #retval =
+        retval = tensor.swapaxes(0, 2)[::-1]
+
+
+        if n_times == 1:
+            return retval
+        elif n_times > 1:
+            return self.rotate(retval, n_times - 1)
