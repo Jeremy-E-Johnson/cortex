@@ -20,26 +20,30 @@ class VOC(BasicDataset):
     """
 
     def __init__(self, images_loaded=10, chunk_size=5, out_path=None, chunks=1000,
-                 mode='train', source=None, name='voc', **kwargs):
+                 start_image=0, mode='train', source=None, name='voc', **kwargs):
         """
 
         Args:
             images_loaded (int): How many images to load
             chunk_size (int): Dimension of chunks to be made.
-            mode (str): Type of data to load, train, trainval, val.
+            mode (str): Type of data to load, train, valid, test.
             source (str): Path to directory containing VOCdevkit
             name: Name of iterator
             **kwargs:
         """
 
+        self.mode_resolve = {'train': 'train', 'valid': 'trainval', 'test': 'val'}
+        self.mode = self.mode_resolve[mode]
+
         self.logger = logging.getLogger(
             '.'.join([self.__module__, self.__class__.__name__]))
-        self.logger.info('Loading %s from %s' % (name, source))
+        self.logger.info('Loading %s from %s as %s' % (name, source, self.mode))
 
         if source is None:
             raise ValueError('No source file provided.')
         source = resolve_path(source)
 
+        self.start_image = start_image
         self.chunks = chunks
         self.images_loaded = images_loaded
         if chunk_size % 2:
@@ -48,7 +52,7 @@ class VOC(BasicDataset):
             self.logger.info('Using %d + 1 to get an odd chunk size.' % chunk_size)
             self.chunk_size = chunk_size + 1
 
-        X, Y = self.get_data(source, mode)
+        X, Y = self.get_data(source, self.mode)
         data = {name: X, 'label': Y}
         distributions = {name: 'multinomial', 'label': 'multinomial'}
 
@@ -60,12 +64,42 @@ class VOC(BasicDataset):
         if self.shuffle:
             self.randomize()
 
+    @staticmethod
+    def factory(split=None, idx=None, batch_sizes=None, **kwargs):
+        if split is None:
+            raise NotImplementedError('Idx are not supported for this dataset yet.')
+        if batch_sizes is None:
+            raise ValueError('Need batch sizes')
+
+        chunks = kwargs['chunks']
+        chunk_ammounts = []
+        for val in split:
+            chunk_ammounts.append(int(chunks * val))
+
+        train = VOC(images_loaded=10, start_image=0, chunk_size=kwargs['chunk_size'],
+                    chunks=chunk_ammounts[0], mode='train', source=kwargs['source'],
+                    batch_size=batch_sizes[0])
+        valid = VOC(images_loaded=5, start_image=10, chunk_size=kwargs['chunk_size'],
+                    chunks=chunk_ammounts[1], mode='valid', source=kwargs['source'],
+                    batch_size=batch_sizes[1])
+        test = VOC(images_loaded=5, start_image=15, chunk_size=kwargs['chunk_size'],
+                   chunks=chunk_ammounts[2], mode='test', source=kwargs['source'],
+                   batch_size=batch_sizes[2])
+
+        accum = 0
+        idx = []
+        for val in chunk_ammounts:
+            idx.append(range(accum, accum + val))
+            accum += val
+
+        return train, valid, test, idx
+
     def get_data(self, source, mode):
         """Gets data given source, chunks it, and returns chunks with center labels.
 
         Args:
             source (str): File path to directory containing VOCdevkit.
-            mode (str): Mode of data, eg. train, trainval, val.
+            mode (str): Mode of data, eg. train, valid, test.
 
         Returns:
 
@@ -119,7 +153,7 @@ class VOC(BasicDataset):
         def get_random_chunk(pixels_data, pixels_label):
             """Helper function for get_data, gets random chunk from data, and returns label for center.
 
-            Args:
+            Args:self, VOC
                 pixels_data (list of lists): Image pixels of data.
                 pixels_label (list of lists): Image pixels of label.
 
@@ -144,7 +178,7 @@ class VOC(BasicDataset):
         self.label_images = []
         images_loaded = 0
         for name in names:
-            if images_loaded < self.images_loaded:
+            if images_loaded < (self.images_loaded + self.start_image) and images_loaded >= self.start_image:
                 label_im = Image.open(source + '/basic/VOCdevkit/VOC2010/SegmentationObject/' + name + '.png')
                 label_pixels = image_to_pixels(label_im)
                 if get_unique(label_pixels) == 3:
@@ -154,13 +188,15 @@ class VOC(BasicDataset):
                     self.data_images.append(image_to_pixels(data_im))
 
                     images_loaded += 1
+            elif images_loaded < self.start_image:
+                images_loaded += 1
             else:
                 break
 
         X = []
         Y = []
         for i in xrange(0, self.chunks):
-            k = rand.randint(0, images_loaded - 1)
+            k = rand.randint(0, len(self.data_images) - 1)
             x, y = get_random_chunk(self.data_images[k], self.label_images[k])
             X.append(np.array(x, dtype='float32')/255)  # Normalize
             Y.append(np.array(y, dtype='float32'))
@@ -169,4 +205,15 @@ class VOC(BasicDataset):
 
         return np.array(X), np.array(Y)
 
+    def next(self):
+        rval = super(VOC, self).next()
 
+        #data = rval['voc']
+
+        #rval['voc'] = []
+        #for k in range(0, 4):
+        #    rval['voc'].append(np.swapaxes(np.rot90(np.swapaxes(data, 1, 2), k), 1, 2)[0:(self.chunk_size + 1)/2].astype('float32'))
+
+        rval['label'] = np.array([b[1] for b in rval['label']])
+
+        return rval
