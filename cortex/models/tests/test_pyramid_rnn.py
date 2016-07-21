@@ -38,8 +38,6 @@ def test_step(pyramid=None, dim_in=1, dim_h=17, width=13):
 
     n = np.tanh(preact)
 
-    print n.shape
-
     np.testing.assert_almost_equal(t, n)
 
 
