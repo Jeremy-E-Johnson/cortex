@@ -9,17 +9,18 @@ import theano.tensor as T
 
 theano.config.optimizer = 'None'
 
-def test_build(dim_in=13, dim_h=17):
+
+def test_build(dim_in=1, dim_h=17, width=13):
     pyramid = Pyramid_RNN.factory(dim_in=dim_in, dim_hs=[dim_h],
-                                  dim_out=1)
+                                  width=width, dim_out=1)
     pyramid.set_tparams()
 
     return pyramid
 
 
-def test_step(pyramid=None, dim_in=13, dim_h=17):
+def test_step(pyramid=None, dim_in=1, dim_h=17, width=13):
     if pyramid is None:
-        pyramid = test_build(dim_in=dim_in, dim_h=dim_h)
+        pyramid = test_build(dim_in=dim_in, dim_h=dim_h, width=width)
 
     m = theano.tensor.tensor3()
     y = theano.tensor.tensor3()
@@ -29,20 +30,22 @@ def test_step(pyramid=None, dim_in=13, dim_h=17):
     activation = pyramid._step(m, y, h_, Ur)
     f = theano.function([m, y, h_, Ur], activation)
 
+    t = f(np.ones((10, width, dim_h), dtype='float32'), np.ones((10, width, dim_h), dtype='float32'),
+          np.ones((10, width, dim_h), dtype='float32'), pyramid.params['Ur0'])
 
-    t = f(np.ones((10, dim_in, dim_h), dtype='float32'), np.ones((10, dim_in, dim_h), dtype='float32'),
-          np.ones((10, dim_in, dim_h), dtype='float32'), pyramid.params['Ur0'])
+    preact = np.ones((10, width, dim_h), dtype='float32') + \
+             np.dot(np.ones((10, width, 3*dim_h), dtype='float32'), pyramid.params['Ur0'])
 
-    preact = np.ones((10, dim_in, dim_h), dtype='float32') + \
-             np.dot(np.ones((10, dim_in, 3*dim_h), dtype='float32'), pyramid.params['Ur0'])
     n = np.tanh(preact)
+
+    print n.shape
 
     np.testing.assert_almost_equal(t, n)
 
 
-def test_call(pyramid=None, dim_in=13, dim_h=17):
+def test_call(pyramid=None, dim_in=1, dim_h=17, width=13):
     if pyramid is None:
-        pyramid = test_build(dim_in=dim_in, dim_h=dim_h)
+        pyramid = test_build(dim_in=dim_in, dim_h=dim_h, width=width)
 
     rng = np.random.RandomState()
 
@@ -51,5 +54,3 @@ def test_call(pyramid=None, dim_in=13, dim_h=17):
     y = pyramid(x)
 
     f = theano.function([], y[0]['p'])
-
-    print f()
