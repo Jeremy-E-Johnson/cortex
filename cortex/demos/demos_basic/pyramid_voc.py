@@ -14,7 +14,7 @@ from collections import OrderedDict
 import theano
 import numpy as np
 from cortex.models.pyramid_rnn import Pyramid_RNN
-from cortex.utils import intX, floatX
+from cortex.utils import intX, floatX, logger
 from cortex.datasets import resolve as resolve_dataset
 import theano.tensor as T
 
@@ -34,12 +34,12 @@ _learning_args = dict(
 _dataset_args = dict(
     train_batch_size=10,
     valid_batch_size=10,
-    #test_batch_size=10,
+    # test_batch_size=10,
     debug=False,
     dataset='voc',
     chunks=1000,
     distribution='multinomial',
-    chunk_size=15,
+    chunk_size=7,
     source='$data'
 )
 
@@ -50,7 +50,7 @@ _model_args = dict(
 )
 
 pyramid_args = dict(
-    dim_hs=[17],
+    dim_hs=[25],
     input_layer='voc',
     output='label',
 )
@@ -82,18 +82,17 @@ def _build(module):
 def _cost(module):
     models = module.models
 
-    X = module.inputs[module.dataset.name]#.swapaxes(0, 1)
+    X = module.inputs[module.dataset.name].swapaxes(0, 1)
     Y = module.inputs['label']
     used_inputs = [module.dataset.name, 'label']
 
     model = models['pyramid_rnn']
-    main(model)
 
     outputs, preact, updates = model(X)
 
     results = OrderedDict()
     p = outputs['p']
-    base_cost = model.neg_log_prob(Y, p).sum(0).mean()
+    base_cost = model.neg_log_prob(Y, p).mean()
     cost = base_cost
 
     constants = []
@@ -112,14 +111,3 @@ def _cost(module):
 
     return used_inputs, results, updates, constants, outputs
 
-
-def main(model):
-    x = T.alloc(1, 8, 10, 17)
-
-    params = model.get_sample_params()
-
-    #print params
-
-    a = model.call_seqs(x, None, 0, *params)[0]
-
-    print a.eval().shape, '****************************************'
