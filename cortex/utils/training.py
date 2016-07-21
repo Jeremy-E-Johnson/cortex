@@ -12,7 +12,7 @@ import argparse
 from collections import OrderedDict
 from glob import glob
 import logging
-if not 'matplotlib' in sys.modules:
+if 'matplotlib' not in sys.modules:
     import matplotlib
     matplotlib.use('Agg')
 import numpy as np
@@ -47,6 +47,7 @@ from .tools import (
 np.set_printoptions(threshold=np.nan)
 logger = logging.getLogger(__name__)
 
+
 def make_argument_parser():
     '''Generic experiment parser.
 
@@ -68,6 +69,7 @@ def make_argument_parser():
     parser.add_argument('-v', '--verbosity', type=int, default=1,
                         help='Verbosity of the logging. (0, 1, 2)')
     return parser
+
 
 def make_argument_parser_trainer():
     '''Generic experiment parser for a trainer.
@@ -93,6 +95,7 @@ def make_argument_parser_trainer():
                         help='Verbosity of the logging. (0, 1, 2)')
     return parser
 
+
 def make_argument_parser_test():
     '''Generic experiment parser for testing.
 
@@ -111,6 +114,7 @@ def make_argument_parser_test():
     parser.add_argument('-v', '--verbosity', type=int, default=1,
                         help='Verbosity of the logging. (0, 1, 2)')
     return parser
+
 
 def set_experiment(args):
     '''Generic experiment setup method.
@@ -186,6 +190,7 @@ def set_experiment(args):
     exp_dict['model_to_load'] = model_to_load
     return exp_dict
 
+
 def reload_model(args):
     '''Reloads a model from argparse args.
 
@@ -237,6 +242,7 @@ def reload_model(args):
     exp_dict.update(**args)
     return exp_dict
 
+
 def set_model(create_model, model_to_load, unpack, **kwargs):
     '''Convenience method for creating new or loading old model.
 
@@ -267,6 +273,7 @@ def set_model(create_model, model_to_load, unpack, **kwargs):
         models = create_model()
     return models
 
+
 def set_tparams(model_dict):
     '''Generic tparams setter.
 
@@ -278,6 +285,7 @@ def set_tparams(model_dict):
     for model in model_dict.values():
         tparams.update(**model.set_tparams())
     return tparams
+
 
 def set_params(tparams, updates, excludes=[]):
     '''Sets params, removing updates from tparams.
@@ -306,6 +314,7 @@ def set_params(tparams, updates, excludes=[]):
     logging.info('Saved params: %s' % all_params.keys())
 
     return tparams, all_params
+
 
 def set_optimizer(inputs, cost, tparams, constants, updates, extra_outs,
                   optimizer='sgd', optimizer_args=None,
@@ -342,6 +351,7 @@ def set_optimizer(inputs, cost, tparams, constants, updates, extra_outs,
         extra_outs=extra_outs, **optimizer_args)
 
     return f_grad_shared, f_grad_updates, learning_args
+
 
 def test(data_iter, f_test, f_test_keys, input_keys, n_samples=None):
     '''Tests the model using a data iterator.
@@ -406,6 +416,7 @@ def test(data_iter, f_test, f_test_keys, input_keys, n_samples=None):
 
     return results
 
+
 def validate(results, best_valid, e, best_epoch, save=None, valid_key=None,
              valid_sign=None, bestfile=None, **kwargs):
     '''Generic validation method.
@@ -443,6 +454,7 @@ def validate(results, best_valid, e, best_epoch, save=None, valid_key=None,
         print 'Best (%.2f) at epoch %d' % (best_valid, best_epoch)
 
     return best_valid, best_epoch
+
 
 def main_loop(train, valid,
               f_grad_shared, f_grad_updates, f_test,
@@ -583,6 +595,7 @@ def main_loop(train, valid,
             if e > epochs:
                 break
 
+            inps.reverse()  # THIS IS A SPOT FIX FOR 'pyramid_voc.py' DEMO!
             rval = f_grad_shared(*inps)
 
             if check_bad_nums(rval):

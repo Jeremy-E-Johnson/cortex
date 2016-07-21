@@ -29,6 +29,7 @@ from ..datasets import dataset_factory
 
 logger = logging.getLogger('cortex')
 
+
 def setup(module):
     '''Sets up module.
 
@@ -36,6 +37,7 @@ def setup(module):
     if hasattr(module, 'setup'):
         print_section('Running setup')
         module.setup()
+
 
 def set_data(module):
     '''Sets the datasets.
@@ -60,6 +62,7 @@ def set_data(module):
     module.dataset = datasets['train']
     module.valid_dataset = datasets['valid']
     module.test_dataset = datasets['test']
+
 
 def make_inputs(module):
     '''Forms the inputs from the dataset
@@ -95,6 +98,7 @@ def make_inputs(module):
     dataset.reset()
     module.inputs = inps
 
+
 def build(module, model_to_load=None):
     '''Forms the models.
 
@@ -109,12 +113,14 @@ def build(module, model_to_load=None):
     module.models = models
     return set_tparams(module)
 
+
 def set_tparams(module):
     tparams = OrderedDict()
     for k, v in module.models.iteritems():
         tparams.update(**v.set_tparams())
     module.tparams = tparams
     return tparams
+
 
 def set_cost(module):
     '''Sets costs.
@@ -135,6 +141,7 @@ def set_cost(module):
     module.inputs = inputs
     return results, updates, constants, outputs
 
+
 def set_test_function(module, results, outputs):
     '''Sets the test function of a module.
 
@@ -142,8 +149,9 @@ def set_test_function(module, results, outputs):
     if hasattr(module, 'test'):
         f_test = module.test(results, outputs)
     else:
-        f_test = theano.function(module.inputs.values(), results)
+        f_test = theano.function(module.inputs.values()[::-1], results)
     return f_test
+
 
 def set_out_function(module, results, outputs):
     '''Sets function for outputs.
@@ -157,6 +165,7 @@ def set_out_function(module, results, outputs):
             outs[k] = v
     f_outs = theano.function(module.inputs.values(), outs)
     return f_outs
+
 
 def set_save_function(module, tparams):
     '''Sets the save function of a module.
@@ -174,6 +183,7 @@ def set_save_function(module, tparams):
         f_save = save
     return f_save
 
+
 def set_viz_function(module, results, outputs):
     '''Sets the visualization function of a module.
 
@@ -188,11 +198,13 @@ def set_viz_function(module, results, outputs):
     else:
         return None
 
+
 def set_eval_functions(module, **kwargs):
     if hasattr(module, 'eval'):
         return module.eval(**kwargs)
     else:
         return OrderedDict()
+
 
 def check(module):
     '''Runs checks.
@@ -202,6 +214,7 @@ def check(module):
         logger.info('Checking experiment.')
         module.check()
 
+
 def finish(module):
     '''Extra finishing-up.
 
@@ -209,6 +222,7 @@ def finish(module):
     if hasattr(module, 'finish'):
         logger.info('Finishing up setup')
         module.finish()
+
 
 def train(module, cost, tparams, updates, constants, f_test=None, f_save=None,
           f_viz=None, f_outs=None, test_every=10, show_every=10,
@@ -288,6 +302,7 @@ class Inspector(object):
     def show(self):
         for k in self.eval_keys:
             self.__dict__[k]()
+
 
 class ModuleContainer(object):
     __required_methods = ['_build', '_cost']
@@ -411,6 +426,7 @@ def flatten_component_layers(models, model_dict):
     if len(component_list) > 0:
         flatten_component_layers(component_list, model_dict)
 
+
 def load_module(model_file, strict=True):
     '''Loads pretrained model.
 
@@ -502,6 +518,7 @@ def load_module(model_file, strict=True):
 
     set_tparams(module)
     return module
+
 
 def main(args=None):
     if args is None:
