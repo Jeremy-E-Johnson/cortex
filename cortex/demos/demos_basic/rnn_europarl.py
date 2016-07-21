@@ -36,6 +36,7 @@ _dataset_args = dict(
 _model_args = dict(
     dim_h=None,
     l2_decay=None,
+    mask_in='mask_in'
 )
 
 simple_rnn_args = dict(
@@ -71,11 +72,12 @@ def _build(module):
 def _cost(module):
     models = module.models
 
+    mask_in = module.inputs['mask_in'].transpose(1, 0)
     X = module.inputs[module.dataset.name].transpose(1, 0, 2)
-    used_inputs = [module.dataset.name]
+    used_inputs = [module.dataset.name, 'mask_in']
 
     model = models['rnn']
-    outputs, preact, updates = model(X)
+    outputs, preact, updates = model(X, m=mask_in)
 
     results = OrderedDict()
     p = outputs['p']
