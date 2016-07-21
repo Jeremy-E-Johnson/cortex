@@ -43,13 +43,15 @@ def resolve(c):
     from .basic.uci import UCI
     from .basic.cifar import CIFAR
     from .basic.europarl import Europarl
+    from .basic.voc import VOC
 
     r_dict = {
         'mnist': MNIST,
         'cifar': CIFAR,
         'caltech': CALTECH,
         'uci': UCI,
-        'europarl': Europarl
+        'europarl': Europarl,
+        'voc': VOC
     }
 
     C = r_dict.get(c, None)
@@ -178,7 +180,7 @@ def dataset_factory(resolve_dataset, dataset=None, split=[0.7, 0.2, 0.1],
             valid_batch_size=valid_batch_size, test_batch_size=test_batch_size,
             **dataset_args)
     else:
-        train, valid, test, idx =  C.factory(
+        train, valid, test, idx = C.factory(
             split=split, idx=idx,
             batch_sizes=[train_batch_size, valid_batch_size, test_batch_size],
             **dataset_args)
