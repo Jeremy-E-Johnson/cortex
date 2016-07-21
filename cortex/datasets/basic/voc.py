@@ -111,7 +111,7 @@ class VOC(BasicDataset):
             """Helper function for get_data, returns the number of unique classifiers in an image.
 
             Args:
-                im (list of lists): Pixel classifier values.
+                pixels (list of lists): Pixel classifier values.
 
             Returns (int): Number of unique classifiers in image.
 
@@ -184,7 +184,7 @@ class VOC(BasicDataset):
                 if get_unique(label_pixels) == 3:
                     self.label_images.append(project_to_binary(label_pixels))
 
-                    data_im = Image.open(source + '/basic/VOCdevkit/VOC2010/JPEGImages/' + name + '.jpg').convert('1')
+                    data_im = Image.open(source + '/basic/VOCdevkit/VOC2010/JPEGImages/' + name + '.jpg').convert('L')
                     self.data_images.append(image_to_pixels(data_im))
 
                     images_loaded += 1
@@ -198,7 +198,7 @@ class VOC(BasicDataset):
         for i in xrange(0, self.chunks):
             k = rand.randint(0, len(self.data_images) - 1)
             x, y = get_random_chunk(self.data_images[k], self.label_images[k])
-            X.append(np.array(x, dtype='float32')/255)  # Normalize
+            X.append(np.array(x, dtype='float32')/255.0)  # Normalize
             Y.append(np.array(y, dtype='float32'))
 
         assert len(X) == self.chunks and len(Y) == self.chunks
@@ -207,12 +207,6 @@ class VOC(BasicDataset):
 
     def next(self):
         rval = super(VOC, self).next()
-
-        #data = rval['voc']
-
-        #rval['voc'] = []
-        #for k in range(0, 4):
-        #    rval['voc'].append(np.swapaxes(np.rot90(np.swapaxes(data, 1, 2), k), 1, 2)[0:(self.chunk_size + 1)/2].astype('float32'))
 
         rval['label'] = np.array([b[1] for b in rval['label']])
 
