@@ -130,15 +130,12 @@ class Pyramid_RNN(RNN):
         input = x
 
         updates = theano.OrderedUpdates()
-        print 'width = ', self.width, '**************** ', (self.width + 1)/2, self.dim_hs, '++++++++++++++++++++++++++'
 
         h0s = []
         hs = []
-        #directional_values = []
         for k in range(0, 4):  # Iterate through directions.
-            #x = np.swapaxes(np.rot90(np.swapaxes(input, 1, 2), k), 1, 2)[0:(self.width + 1)/2].astype('float32')
             x = self.rotate(input, k)[:(self.width + 1)/2, :, :].astype('float32')
-            h0s.append([T.alloc(0., (self.width + 1)/2, x.shape[1], dim_h).astype(floatX) for dim_h in self.dim_hs])
+            h0s.append([T.alloc(0, x.shape[1], self.width, dim_h).astype(floatX) for dim_h in self.dim_hs])
             for i, h0 in enumerate(h0s[k]):
                 seqs         = [m[:, :, :, None]] + self.call_seqs(x, None, i, *params)
                 outputs_info = [h0]
@@ -157,15 +154,13 @@ class Pyramid_RNN(RNN):
                 output = [h[-1, :, (self.width + 1)/2, :]]
             else:
                 output = output + [h[-1, :, (self.width + 1)/2, :]]
-            #directional_values += [h[-1, :, (self.width + 1)/2, :]]  # Remember directional outputs.
 
-        #print T.sum(output)
         o_params    = self.get_output_args(*params)
-        out_net_out = self.output_net.step_call(T.sum(output), *o_params)  # Sum different directions.
+        out_net_out = self.output_net.step_call(T.sum(output, 0), *o_params)  # Sum different directions.
         preact      = out_net_out['z']
         p           = out_net_out['p']
 
-        return coll.OrderedDict(hs=hs, p=p, z=preact), updates, h0s[0]
+        return coll.OrderedDict(hs=hs, p=p[:, 0], z=preact), updates, h0s[0]
 
     def __call__(self, x, m=None, h0s=None, condition_on=None):
         '''Call function.
@@ -187,7 +182,7 @@ class Pyramid_RNN(RNN):
         constants = []
 
         if m is None:
-            m = T.ones((x.shape)).astype(floatX)
+            m = T.ones(x.shape).astype(floatX)
 
         params = self.get_sample_params()
 
@@ -208,58 +203,22 @@ class Pyramid_RNN(RNN):
             list: list of scan inputs.
 
         '''
-        """
-        #print x.shape
-        x = x[:, :, :, None]#.swapaxes(0, 3)
-        #print x.shape
+
+        x = x[:, :, :, None]
         if level == 0:
             i_params = self.get_input_args(*params)
             a = self.input_net.step_preact(x, *i_params)
         else:
             i_params = self.get_inter_args(level - 1, *params)
             a = self.inter_nets[level - 1].step_preact(x, *i_params)
-        #print a.shape
-        #print self.input_net.dim_in
-        #print self.input_net.dim_out
-        """
-
-        params = list(params)
-
-        print params
-
-        W = params.pop(1)
-        b = params.pop(1)
-
-        print W, type(W)
-
-        print params
-
-        for i, z in enumerate(x):
-            a = T.concatenate([(T.dot(c, W) + b)[:, None, None] for c in z.swapaxes(0, 1)], 1).swapaxes(0, 1)
-            if i:
-                T.concatenate([rval, a], 2)
-            else:
-                rval = a
-
-        #a = T.dot(a, T.alloc(0, 2, 2))
-
-        if condition_on is not None:
-            a += condition_on
 
         return [a]
 
     def rotate(self, tensor, n_times):
-        #retval = tensor.copy()
         if n_times == 0:
             return tensor
 
-        #for i in range(0, self.width):
-        #    retval[:, :, tensor.shape[0] - i] = tensor[i, :, :]
-
-        #retval = np.array([tensor[:, :, self.width - 1 - i] for i in range(0, self.width)])
-        #retval =
         retval = tensor.swapaxes(0, 2)[::-1]
-
 
         if n_times == 1:
             return retval
