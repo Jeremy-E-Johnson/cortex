@@ -117,10 +117,10 @@ class VOC(BasicDataset):
 
             """
             unique = []
-            for line in pixels:
-                for i in line:
-                    if i not in unique:
-                        unique.append(i)
+            for l in pixels:
+                for j in l:
+                    if j not in unique:
+                        unique.append(j)
             return len(unique)
 
         def image_to_pixels(im):
