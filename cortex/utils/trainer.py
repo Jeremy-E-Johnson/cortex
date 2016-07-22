@@ -149,7 +149,7 @@ def set_test_function(module, results, outputs):
     if hasattr(module, 'test'):
         f_test = module.test(results, outputs)
     else:
-        f_test = theano.function(module.inputs.values()[::-1], results)
+        f_test = theano.function(module.inputs.values(), results)  # Not sure why this change was made, but it seems necessary.
     return f_test
 
 
