@@ -595,7 +595,6 @@ def main_loop(train, valid,
             if e > epochs:
                 break
 
-            inps.reverse()  # THIS IS A SPOT FIX FOR 'pyramid_voc.py' DEMO!
             rval = f_grad_shared(*inps)
 
             if check_bad_nums(rval):
