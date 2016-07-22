@@ -133,9 +133,10 @@ class Pyramid_RNN(RNN):
 
         h0s = []
         hs = []
+        output = []
         for k in range(0, 4):  # Iterate through directions.
-            x = self.rotate(input, k)[:(self.width + 1)/2, :, :].astype('float32')
-            h0s.append([T.alloc(0, x.shape[1], self.width, dim_h).astype(floatX) for dim_h in self.dim_hs])
+            x = self.rotate(input, k)[:(self.width + 1)/2, :, :].astype('float32')  # Rotates input
+            h0s.append([T.alloc(0, x.shape[1], self.width, dim_h).astype(floatX) for dim_h in self.dim_hs])  # Make h0
             for i, h0 in enumerate(h0s[k]):
                 seqs         = [m[:, :, :, None]] + self.call_seqs(x, None, i, *params)
                 outputs_info = [h0]
@@ -150,17 +151,14 @@ class Pyramid_RNN(RNN):
                 hs.append(h)
                 x = h
                 updates += updates_
-            if k == 0:
-                output = [h[-1, :, (self.width + 1)/2, :]]
-            else:
-                output = output + [h[-1, :, (self.width + 1)/2, :]]
+            output.append(h[-1, :, (self.width + 1)/2, :])  # Collect directional outputs.
 
         o_params    = self.get_output_args(*params)
         out_net_out = self.output_net.step_call(T.sum(output, 0), *o_params)  # Sum different directions.
         preact      = out_net_out['z']
         p           = out_net_out['p']
 
-        return coll.OrderedDict(hs=hs, p=p[:, 0], z=preact), updates, h0s[0]
+        return coll.OrderedDict(hs=hs, p=p, z=preact), updates, h0s[0]
 
     def __call__(self, x, m=None, h0s=None, condition_on=None):
         '''Call function.
@@ -215,6 +213,15 @@ class Pyramid_RNN(RNN):
         return [a]
 
     def rotate(self, tensor, n_times):
+        """
+
+        Args:
+            tensor (theano tensor): Tensor to rotate along first and third axes.
+            n_times (int): Number of times to rotate.
+
+        Returns: Tensor rotated n times about its first and third axes.
+
+        """
         if n_times == 0:
             return tensor
 
