@@ -25,7 +25,7 @@ _learning_args = dict(
     learning_rate_scheduler=None,
     optimizer='rmsprop',
     optimizer_args=dict(),
-    epochs=100,
+    epochs=150,
     valid_key='-sum log p(x | y)',
     valid_sign='+',
     excludes=[]
@@ -39,7 +39,7 @@ _dataset_args = dict(
     dataset='voc',
     chunks=1000,
     distribution='multinomial',
-    chunk_size=7,
+    chunk_size=25,
     source='$data'
 )
 
@@ -58,9 +58,9 @@ pyramid_args = dict(
 extra_arg_keys = ['pyramid_args']
 
 theano.config.on_unused_input = 'ignore'
-theano.config.optimizer = 'None'
-#theano.config.exception_verbosity = 'high'
-#theano.config.compute_test_value = 'warn'
+# theano.config.optimizer = 'None'
+# theano.config.exception_verbosity = 'high'
+# theano.config.compute_test_value = 'warn'
 
 
 def _build(module):
@@ -84,7 +84,7 @@ def _cost(module):
 
     X = module.inputs[module.dataset.name].swapaxes(0, 1)
     Y = module.inputs['label']
-    used_inputs = [module.dataset.name, 'label']
+    used_inputs = ['label', module.dataset.name]
 
     model = models['pyramid_rnn']
 
@@ -92,7 +92,7 @@ def _cost(module):
 
     results = OrderedDict()
     p = outputs['p']
-    base_cost = model.neg_log_prob(Y, p).mean()
+    base_cost = model.neg_log_prob(Y, p[:, 0]).mean()
     cost = base_cost
 
     constants = []
@@ -110,4 +110,3 @@ def _cost(module):
     results['cost'] = cost
 
     return used_inputs, results, updates, constants, outputs
-
