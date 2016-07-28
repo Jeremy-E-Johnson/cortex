@@ -17,6 +17,7 @@ from cortex.models.pyramid_rnn import Pyramid_RNN
 from cortex.utils import intX, floatX, logger
 from cortex.datasets import resolve as resolve_dataset
 import theano.tensor as T
+import matplotlib.pyplot as plt
 
 
 # Default arguments
@@ -25,7 +26,7 @@ _learning_args = dict(
     learning_rate_scheduler=None,
     optimizer='rmsprop',
     optimizer_args=dict(),
-    epochs=150,
+    epochs=15,
     valid_key='-sum log p(x | y)',
     valid_sign='+',
     excludes=[]
@@ -110,3 +111,10 @@ def _cost(module):
     results['cost'] = cost
 
     return used_inputs, results, updates, constants, outputs
+
+
+def _vis(module, outputs, results):
+    out_path = module.out_path
+
+    plt.matshow(np.zeros((10, 10)))
+    plt.savefig('Testp_plot.png')

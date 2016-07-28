@@ -7,9 +7,9 @@ from os import path
 import logging
 from ...utils.tools import resolve_path
 from PIL import Image
-import PIL
 import random
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class VOC(BasicDataset):
@@ -211,3 +211,9 @@ class VOC(BasicDataset):
         rval['label'] = np.array([b[1] for b in rval['label']])
 
         return rval
+
+    def save_images(self, image, ith_image, out_path=None):
+
+        plt.matshow(image)
+
+        plt.savefig(out_path + ith_image + '.png')
